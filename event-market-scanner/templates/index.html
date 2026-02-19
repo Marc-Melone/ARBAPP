@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Market Scanner — Arbitrage</title>
+    <style>
+        :root {
+            --bg: #0f1923;
+            --surface: #1a2736;
+            --surface2: #223344;
+            --border: #2d3f52;
+            --text: #e0e8f0;
+            --text-dim: #7a8ea0;
+            --accent: #00d4ff;
+            --green: #4caf50;
+            --green-bg: #0d2818;
+            --red: #f44336;
+            --orange: #ff9800;
+            --blue: #2196f3;
+            --profit: #66bb6a;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh;
+        }
+        .container { max-width: 1320px; margin: 0 auto; padding: 24px 20px; }
+
+        /* Header */
+        .header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 28px; flex-wrap: wrap; gap: 16px;
+        }
+        .header h1 { font-size: 24px; font-weight: 700; color: var(--accent); }
+        .header h1 span { color: var(--text-dim); font-weight: 400; font-size: 16px; }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+        .last-scan { font-size: 13px; color: var(--text-dim); }
+
+        .scan-btn {
+            background: var(--accent); color: #000; border: none; padding: 10px 24px;
+            border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+        }
+        .scan-btn:hover { background: #33ddff; transform: translateY(-1px); }
+        .scan-btn:disabled { background: var(--border); color: var(--text-dim); cursor: not-allowed; transform: none; }
+
+        /* Stats */
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 12px; margin-bottom: 28px;
+        }
+        .stat-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 16px 18px;
+        }
+        .stat-card .label {
+            font-size: 11px; color: var(--text-dim); text-transform: uppercase;
+            letter-spacing: 0.5px; margin-bottom: 4px;
+        }
+        .stat-card .value { font-size: 26px; font-weight: 700; font-family: 'SF Mono', monospace; }
+        .stat-card .value.green { color: var(--green); }
+        .stat-card .value.accent { color: var(--accent); }
+        .stat-card .value.orange { color: var(--orange); }
+
+        /* Explainer */
+        .explainer {
+            background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+            padding: 16px 20px; margin-bottom: 28px; font-size: 13px; color: var(--text-dim); line-height: 1.7;
+        }
+        .explainer strong { color: var(--text); }
+        .explainer code {
+            background: var(--bg); padding: 2px 6px; border-radius: 4px; font-size: 12px; color: var(--accent);
+        }
+
+        /* Section */
+        .section { margin-bottom: 32px; }
+        .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+        .section-header h2 { font-size: 18px; font-weight: 600; }
+        .badge {
+            background: var(--surface2); color: var(--text-dim); padding: 3px 10px;
+            border-radius: 12px; font-size: 12px; font-weight: 500;
+        }
+        .badge.green { background: var(--green-bg); color: var(--green); }
+
+        /* Arb Cards */
+        .arb-card {
+            background: var(--surface); border: 1px solid var(--green); border-radius: 12px;
+            padding: 20px; margin-bottom: 14px; transition: border-color 0.2s;
+        }
+        .arb-card:hover { border-color: var(--profit); }
+        .arb-card .event-name { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+        .arb-card .outcome-name { font-size: 13px; color: var(--accent); margin-bottom: 12px; }
+        .arb-card .outcome-name .kalshi-label { color: var(--text-dim); font-weight: 400; }
+
+        .prices-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+        .price-box {
+            background: var(--bg); border-radius: 8px; padding: 12px 14px; border: 1px solid var(--border);
+        }
+        .price-box.best { border-color: var(--green); background: #0a1f0a; }
+        .price-box .platform { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .price-box .platform.poly { color: var(--blue); }
+        .price-box .platform.kalshi { color: var(--orange); }
+        .price-box .platform.result { color: var(--green); }
+        .price-pair { display: flex; gap: 16px; }
+        .price-item .lbl { font-size: 10px; color: var(--text-dim); }
+        .price-item .val { font-size: 20px; font-weight: 700; font-family: 'SF Mono', monospace; }
+        .price-item .val.dim { color: var(--text-dim); font-size: 18px; }
+
+        .arb-footer {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 8px; padding-top: 10px; border-top: 1px solid var(--border);
+        }
+        .arb-action { font-size: 13px; color: var(--blue); font-weight: 500; }
+        .arb-meta { font-size: 12px; color: var(--text-dim); display: flex; gap: 12px; align-items: center; }
+
+        .match-badge {
+            display: inline-flex; align-items: center; gap: 3px; font-size: 11px;
+            padding: 2px 8px; border-radius: 10px; background: var(--surface2);
+        }
+        .match-badge.high { background: #1a3a1a; color: var(--green); }
+        .match-badge.mid { background: #3a3a1a; color: #ffd600; }
+        .match-badge.low { background: #3a2a1a; color: var(--orange); }
+
+        .link-btn { color: var(--accent); text-decoration: none; font-size: 12px; opacity: 0.7; transition: opacity 0.2s; }
+        .link-btn:hover { opacity: 1; }
+        .inverted-badge { color: var(--orange); font-size: 11px; margin-left: 4px; }
+
+        /* Spreads Table */
+        .table-wrapper {
+            overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th {
+            text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 600;
+            color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--border); white-space: nowrap;
+            position: sticky; top: 0; background: var(--surface);
+        }
+        th.right { text-align: right; }
+        td { padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        td.right { text-align: right; }
+        td.mono { font-family: 'SF Mono', monospace; text-align: right; }
+        tr:hover td { background: rgba(0, 212, 255, 0.03); }
+        .spread-val { color: var(--orange); font-weight: 600; }
+        .arb-val { color: var(--green); font-weight: 700; }
+        .no-arb { color: var(--text-dim); }
+        .best-cost { color: var(--green); font-weight: 600; }
+        .dim-cost { color: var(--text-dim); }
+        .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+
+        /* States */
+        .loading-overlay { display: none; text-align: center; padding: 80px 20px; }
+        .loading-overlay.active { display: block; }
+        .spinner {
+            width: 40px; height: 40px; border: 3px solid var(--border);
+            border-top-color: var(--accent); border-radius: 50%;
+            animation: spin 0.8s linear infinite; margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { font-size: 16px; color: var(--text-dim); }
+        .loading-sub { font-size: 13px; color: var(--text-dim); opacity: 0.6; margin-top: 6px; }
+
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-dim); }
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+        .empty-state h3 { font-size: 18px; margin-bottom: 6px; color: var(--text); }
+        .empty-state p { font-size: 14px; }
+
+        .no-arb-notice {
+            text-align: center; padding: 28px; border: 2px dashed var(--orange);
+            border-radius: 12px; color: var(--orange); background: #1a1400; margin-bottom: 28px;
+        }
+
+        @media (max-width: 768px) {
+            .prices-row { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .header { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- Header -->
+    <div class="header">
+        <h1>Event Market Scanner <span>— Cross-Platform Arbitrage</span></h1>
+        <div class="header-right">
+            <span class="last-scan" id="lastScan"></span>
+            <button class="scan-btn" id="scanBtn" onclick="startScan()">Scan Markets</button>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-overlay" id="loadingState">
+        <div class="spinner"></div>
+        <div class="loading-text">Scanning prediction markets…</div>
+        <div class="loading-sub">Fetching events from Polymarket &amp; Kalshi and matching outcomes.<br>This takes about 1–2 minutes.</div>
+    </div>
+
+    <!-- Empty -->
+    <div class="empty-state" id="emptyState">
+        <div class="icon">📊</div>
+        <h3>Ready to Scan</h3>
+        <p>Click <strong>Scan Markets</strong> to fetch live data from Polymarket &amp; Kalshi<br>and find cross-platform arbitrage opportunities.</p>
+    </div>
+
+    <!-- Results -->
+    <div id="results" style="display:none;">
+        <div class="stats-grid" id="statsGrid"></div>
+
+        <div class="explainer">
+            <strong>How it works:</strong>
+            An arbitrage exists when you buy <code>Yes</code> on one platform and <code>No</code> on the other
+            for a combined cost under $1.00 — guaranteeing a profit regardless of outcome.
+            <strong>Strategy A</strong> = Yes @ Polymarket + No @ Kalshi.
+            <strong>Strategy B</strong> = Yes @ Kalshi + No @ Polymarket.
+            <strong>Profit</strong> = $1.00 − total cost.
+        </div>
+
+        <div class="section" id="arbSection"></div>
+        <div class="section" id="spreadsSection"></div>
+    </div>
+</div>
+
+<script>
+let poll = null;
+
+async function startScan() {
+    const btn = document.getElementById('scanBtn');
+    btn.disabled = true; btn.textContent = 'Scanning…';
+    hide('emptyState'); hide('results'); show('loadingState');
+    await fetch('/api/scan', { method: 'POST' });
+    if (poll) clearInterval(poll);
+    poll = setInterval(checkStatus, 2000);
+}
+
+async function checkStatus() {
+    const r = await (await fetch('/api/status')).json();
+    if (r.status === 'done') { clearInterval(poll); poll = null; loadResults(); }
+    else if (r.status === 'error') {
+        clearInterval(poll); poll = null;
+        hide('loadingState'); show('emptyState');
+        document.getElementById('scanBtn').disabled = false;
+        document.getElementById('scanBtn').textContent = 'Scan Markets';
+        alert('Scan failed: ' + r.error);
+    }
+}
+
+async function loadResults() {
+    const d = await (await fetch('/api/results')).json();
+    hide('loadingState'); hide('emptyState'); show('results');
+    const btn = document.getElementById('scanBtn');
+    btn.disabled = false; btn.textContent = 'Scan Again';
+    if (d.last_scan) document.getElementById('lastScan').textContent = 'Last scan: ' + d.last_scan;
+    renderStats(d.stats);
+    renderArbs(d.true_arbs);
+    renderSpreads(d.all_spreads);
+}
+
+function show(id) { const el = document.getElementById(id); el.style.display = ''; el.classList.add('active'); }
+function hide(id) { const el = document.getElementById(id); el.style.display = 'none'; el.classList.remove('active'); }
+
+function pct(v) { return (v * 100).toFixed(1) + '%'; }
+function cents(v) { return (v * 100).toFixed(1) + '¢'; }
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escA(s) { return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function matchBadge(sim) {
+    const cls = sim >= 0.85 ? 'high' : sim >= 0.7 ? 'mid' : 'low';
+    const e = sim >= 0.85 ? '🟢' : sim >= 0.7 ? '🟡' : '🟠';
+    return `<span class="match-badge ${cls}">${e} ${(sim*100).toFixed(0)}%</span>`;
+}
+
+function renderStats(s) {
+    document.getElementById('statsGrid').innerHTML = `
+        <div class="stat-card"><div class="label">Polymarket Events</div><div class="value accent">${s.poly_count||0}</div></div>
+        <div class="stat-card"><div class="label">Kalshi Events</div><div class="value accent">${s.kalshi_count||0}</div></div>
+        <div class="stat-card"><div class="label">Matched Events</div><div class="value orange">${s.matched_count||0}</div></div>
+        <div class="stat-card"><div class="label">Price Spreads</div><div class="value">${s.total_spreads||0}</div></div>
+        <div class="stat-card"><div class="label">True Arbitrage</div><div class="value green">${s.true_arb_count||0}</div></div>
+        ${s.inverted_count ? `<div class="stat-card"><div class="label">Inverted Matches</div><div class="value orange">${s.inverted_count}</div></div>` : ''}
+    `;
+}
+
+function renderArbs(arbs) {
+    const el = document.getElementById('arbSection');
+    if (!arbs || !arbs.length) {
+        el.innerHTML = `<div class="section-header"><h2>🎯 True Arbitrage Opportunities</h2></div>
+            <div class="no-arb-notice">No true arbitrage found — all matched outcomes cost ≥ $1.00.<br>Check the spreads table below for pricing differences to monitor.</div>`;
+        return;
+    }
+    let h = `<div class="section-header"><h2>🎯 True Arbitrage Opportunities</h2><span class="badge green">${arbs.length} found</span></div>`;
+    for (const r of arbs) {
+        h += `<div class="arb-card">
+            <div class="event-name">${esc(r.event)}</div>
+            <div class="outcome-name">${esc(r.outcome)}
+                ${r.outcome !== r.outcome_kalshi ? `<span class="kalshi-label"> ↔ ${esc(r.outcome_kalshi)}</span>` : ''}
+                ${r.inverted ? '<span class="inverted-badge">🔄 inverted</span>' : ''}
+            </div>
+            <div class="prices-row">
+                <div class="price-box">
+                    <div class="platform poly">Polymarket</div>
+                    <div class="price-pair">
+                        <div class="price-item"><div class="lbl">Yes</div><div class="val">${pct(r.poly_yes)}</div></div>
+                        <div class="price-item"><div class="lbl">No</div><div class="val dim">${pct(r.poly_no)}</div></div>
+                    </div>
+                </div>
+                <div class="price-box">
+                    <div class="platform kalshi">Kalshi${r.inverted ? ' (inv)' : ''}</div>
+                    <div class="price-pair">
+                        <div class="price-item"><div class="lbl">Yes</div><div class="val">${pct(r.kalshi_yes)}</div></div>
+                        <div class="price-item"><div class="lbl">No</div><div class="val dim">${pct(r.kalshi_no)}</div></div>
+                    </div>
+                </div>
+                <div class="price-box best">
+                    <div class="platform result">Profit</div>
+                    <div class="price-pair">
+                        <div class="price-item"><div class="lbl">Cost</div><div class="val" style="color:var(--green)">$${r.best_cost.toFixed(4)}</div></div>
+                        <div class="price-item"><div class="lbl">Profit</div><div class="val" style="color:var(--profit)">${cents(r.arb_profit)}</div></div>
+                    </div>
+                </div>
+            </div>
+            <div class="arb-footer">
+                <div class="arb-action">${esc(r.direction)} &nbsp;•&nbsp; ROI: ${r.roi.toFixed(1)}%</div>
+                <div class="arb-meta">
+                    ${matchBadge(r.outcome_sim)}
+                    ${r.poly_url ? `<a href="${r.poly_url}" target="_blank" class="link-btn">Polymarket ↗</a>` : ''}
+                    ${r.kalshi_url ? `<a href="${r.kalshi_url}" target="_blank" class="link-btn">Kalshi ↗</a>` : ''}
+                </div>
+            </div>
+        </div>`;
+    }
+    el.innerHTML = h;
+}
+
+function renderSpreads(rows) {
+    const el = document.getElementById('spreadsSection');
+    if (!rows || !rows.length) { el.innerHTML = ''; return; }
+    let h = `<div class="section-header"><h2>📈 All Cross-Platform Price Spreads</h2><span class="badge">${rows.length} outcomes</span></div>
+        <div class="table-wrapper"><table><thead><tr>
+            <th>Event</th><th>Outcome</th>
+            <th class="right">P.Yes</th><th class="right">P.No</th>
+            <th class="right">K.Yes</th><th class="right">K.No</th>
+            <th class="right">Yes Sprd</th><th class="right">No Sprd</th>
+            <th class="right">Cost A</th><th class="right">Cost B</th>
+            <th class="right">Arb</th><th class="right">Match</th>
+        </tr></thead><tbody>`;
+    for (const r of rows) {
+        const isArb = r.arb_profit > 0;
+        const cA = r.cost_a < r.cost_b ? 'best-cost' : 'dim-cost';
+        const cB = r.cost_b < r.cost_a ? 'best-cost' : 'dim-cost';
+        h += `<tr>
+            <td class="truncate" title="${escA(r.event)}">${esc(r.event.substring(0,35))}</td>
+            <td class="truncate" title="${escA(r.outcome)}">${esc(r.outcome.substring(0,28))}${r.inverted ? ' <span class="inverted-badge">🔄</span>' : ''}</td>
+            <td class="mono">${pct(r.poly_yes)}</td>
+            <td class="mono" style="color:var(--text-dim)">${pct(r.poly_no)}</td>
+            <td class="mono">${pct(r.kalshi_yes)}</td>
+            <td class="mono" style="color:var(--text-dim)">${pct(r.kalshi_no)}</td>
+            <td class="mono spread-val">${cents(r.yes_spread)}</td>
+            <td class="mono spread-val">${cents(r.no_spread)}</td>
+            <td class="mono ${cA}">$${r.cost_a.toFixed(2)}</td>
+            <td class="mono ${cB}">$${r.cost_b.toFixed(2)}</td>
+            <td class="mono ${isArb?'arb-val':'no-arb'}">${isArb ? cents(r.arb_profit) : '—'}</td>
+            <td class="mono">${matchBadge(r.outcome_sim)}</td>
+        </tr>`;
+    }
+    h += '</tbody></table></div>';
+    el.innerHTML = h;
+}
+
+// On load, check if we already have results
+(async () => {
+    try {
+        const r = await (await fetch('/api/status')).json();
+        if (r.status === 'done') loadResults();
+        else if (r.status === 'scanning') {
+            hide('emptyState'); show('loadingState');
+            document.getElementById('scanBtn').disabled = true;
+            document.getElementById('scanBtn').textContent = 'Scanning…';
+            poll = setInterval(checkStatus, 2000);
+        }
+    } catch(e) {}
+})();
+</script>
+</body>
+</html>
